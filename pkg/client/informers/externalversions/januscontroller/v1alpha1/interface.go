@@ -8,8 +8,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// JanusWatchers returns a JanusWatcherInformer.
-	JanusWatchers() JanusWatcherInformer
+	// JanusGuards returns a JanusGuardInformer.
+	JanusGuards() JanusGuardInformer
 }
 
 type version struct {
@@ -23,7 +23,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// JanusWatchers returns a JanusWatcherInformer.
-func (v *version) JanusWatchers() JanusWatcherInformer {
-	return &janusWatcherInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// JanusGuards returns a JanusGuardInformer.
+func (v *version) JanusGuards() JanusGuardInformer {
+	return &janusGuardInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

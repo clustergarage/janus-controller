@@ -2,10 +2,10 @@
 
 package v1alpha1
 
-// JanusWatcherListerExpansion allows custom methods to be added to
-// JanusWatcherLister.
-type JanusWatcherListerExpansion interface{}
+// JanusGuardListerExpansion allows custom methods to be added to
+// JanusGuardLister.
+type JanusGuardListerExpansion interface{}
 
-// JanusWatcherNamespaceListerExpansion allows custom methods to be added to
-// JanusWatcherNamespaceLister.
-type JanusWatcherNamespaceListerExpansion interface{}
+// JanusGuardNamespaceListerExpansion allows custom methods to be added to
+// JanusGuardNamespaceLister.
+type JanusGuardNamespaceListerExpansion interface{}

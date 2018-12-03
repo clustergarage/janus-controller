@@ -11,7 +11,7 @@ import (
 
 type JanuscontrollerV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	JanusWatchersGetter
+	JanusGuardsGetter
 }
 
 // JanuscontrollerV1alpha1Client is used to interact with features provided by the januscontroller.clustergarage.io group.
@@ -19,8 +19,8 @@ type JanuscontrollerV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *JanuscontrollerV1alpha1Client) JanusWatchers(namespace string) JanusWatcherInterface {
-	return newJanusWatchers(c, namespace)
+func (c *JanuscontrollerV1alpha1Client) JanusGuards(namespace string) JanusGuardInterface {
+	return newJanusGuards(c, namespace)
 }
 
 // NewForConfig creates a new JanuscontrollerV1alpha1Client for the given config.

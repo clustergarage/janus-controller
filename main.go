@@ -140,8 +140,8 @@ func main() {
 		log.Fatalf("Error creating connection to JanusD server: %s", err.Error())
 	}
 
-	controller := januscontroller.NewJanusWatcherController(kubeclientset, janusclientset,
-		janusInformerFactory.Januscontroller().V1alpha1().JanusWatchers(),
+	controller := januscontroller.NewJanusGuardController(kubeclientset, janusclientset,
+		janusInformerFactory.Januscontroller().V1alpha1().JanusGuards(),
 		kubeInformerFactory.Core().V1().Pods(),
 		kubeInformerFactory.Core().V1().Endpoints(),
 		janusdConnection)

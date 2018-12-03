@@ -12,8 +12,8 @@ type FakeJanuscontrollerV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeJanuscontrollerV1alpha1) JanusWatchers(namespace string) v1alpha1.JanusWatcherInterface {
-	return &FakeJanusWatchers{c, namespace}
+func (c *FakeJanuscontrollerV1alpha1) JanusGuards(namespace string) v1alpha1.JanusGuardInterface {
+	return &FakeJanusGuards{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

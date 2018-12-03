@@ -37,8 +37,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=januscontroller.clustergarage.io, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("januswatchers"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Januscontroller().V1alpha1().JanusWatchers().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("janusguards"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Januscontroller().V1alpha1().JanusGuards().Informer()}, nil
 
 	}
 

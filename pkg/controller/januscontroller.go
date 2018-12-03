@@ -42,31 +42,31 @@ const (
 	janusdService            = "janusd-svc"
 	janusdSvcPortName        = "grpc"
 
-	// JanusWatcherAnnotationKey value to annotate a pod being watched by a
+	// JanusGuardAnnotationKey value to annotate a pod being guarded by a
 	// JanusD daemon.
-	JanusWatcherAnnotationKey = "clustergarage.io/janus-watcher"
+	JanusGuardAnnotationKey = "clustergarage.io/janus-guard"
 
-	// SuccessSynced is used as part of the Event 'reason' when a JanusWatcher
+	// SuccessSynced is used as part of the Event 'reason' when a JanusGuard
 	// is synced.
 	SuccessSynced = "Synced"
-	// SuccessAdded is used as part of the Event 'reason' when a JanusWatcher
+	// SuccessAdded is used as part of the Event 'reason' when a JanusGuard
 	// is synced.
 	SuccessAdded = "Added"
-	// SuccessRemoved is used as part of the Event 'reason' when a JanusWatcher
+	// SuccessRemoved is used as part of the Event 'reason' when a JanusGuard
 	// is synced.
 	SuccessRemoved = "Removed"
 	// MessageResourceAdded is the message used for an Event fired when a
-	// JanusWatcher is synced added.
-	MessageResourceAdded = "Added JanusD watcher on %v"
+	// JanusGuard is synced added.
+	MessageResourceAdded = "Added JanusD guard on %v"
 	// MessageResourceRemoved is the message used for an Event fired when a
-	// JanusWatcher is synced removed.
-	MessageResourceRemoved = "Removed JanusD watcher on %v"
+	// JanusGuard is synced removed.
+	MessageResourceRemoved = "Removed JanusD guard on %v"
 	// MessageResourceSynced is the message used for an Event fired when a
-	// JanusWatcher is synced successfully.
-	MessageResourceSynced = "JanusWatcher synced successfully"
+	// JanusGuard is synced successfully.
+	MessageResourceSynced = "JanusGuard synced successfully"
 
 	// statusUpdateRetries is the number of times we retry updating a
-	// JanusWatcher's status.
+	// JanusGuard's status.
 	statusUpdateRetries = 1
 	// minReadySeconds
 	minReadySeconds = 10
@@ -84,9 +84,9 @@ var (
 	updatePodQueue sync.Map
 )
 
-// JanusWatcherController is the controller implementation for JanusWatcher
+// JanusGuardController is the controller implementation for JanusGuard
 // resources.
-type JanusWatcherController struct {
+type JanusGuardController struct {
 	// GroupVersionKind indicates the controller type.
 	// Different instances of this struct may handle different GVKs.
 	schema.GroupVersionKind
@@ -96,30 +96,30 @@ type JanusWatcherController struct {
 	// janusclientset is a clientset for our own API group.
 	janusclientset clientset.Interface
 
-	// Allow injection of syncJanusWatcher.
+	// Allow injection of syncJanusGuard.
 	syncHandler func(key string) error
 	// backoff is the backoff definition for RetryOnConflict.
 	backoff wait.Backoff
 
-	// A TTLCache of pod creates/deletes each jw expects to see.
+	// A TTLCache of pod creates/deletes each jg expects to see.
 	expectations *controller.UIDTrackingControllerExpectations
 
-	// A store of JanusWatchers, populated by the shared informer passed to
-	// NewJanusWatcherController.
-	jwLister listers.JanusWatcherLister
-	// jwListerSynced returns true if the pod store has been synced at least
+	// A store of JanusGuards, populated by the shared informer passed to
+	// NewJanusGuardController.
+	jgLister listers.JanusGuardLister
+	// jgListerSynced returns true if the pod store has been synced at least
 	// once. Added as a member to the struct to allow injection for testing.
-	jwListerSynced cache.InformerSynced
+	jgListerSynced cache.InformerSynced
 
 	// A store of pods, populated by the shared informer passed to
-	// NewJanusWatcherController.
+	// NewJanusGuardController.
 	podLister corelisters.PodLister
 	// podListerSynced returns true if the pod store has been synced at least
 	// once. Added as a member to the struct to allow injection for testing.
 	podListerSynced cache.InformerSynced
 
 	// A store of endpoints, populated by the shared informer passed to
-	// NewJanusWatcherController.
+	// NewJanusGuardController.
 	endpointsLister corelisters.EndpointsLister
 	// endpointListerSynced returns true if the endpoints store has been synced
 	// at least once. Added as a member to the struct to allow injection for
@@ -139,17 +139,17 @@ type JanusWatcherController struct {
 	// janusdConnections is a collection of connections we have open to the
 	// JanusD server which wrap important functions to add, remove, and get a
 	// current up-to-date state of what the daemon thinks it should be
-	// watching.
+	// guarding.
 	janusdConnections sync.Map
 	// janusdURL is used to connect to the JanusD gRPC server if daemon is
 	// out-of-cluster.
 	janusdURL string
 }
 
-// NewJanusWatcherController returns a new JanusWatcher controller.
-func NewJanusWatcherController(kubeclientset kubernetes.Interface, janusclientset clientset.Interface,
-	jwInformer informers.JanusWatcherInformer, podInformer coreinformers.PodInformer,
-	endpointsInformer coreinformers.EndpointsInformer, janusdConnection *janusdConnection) *JanusWatcherController {
+// NewJanusGuardController returns a new JanusGuard controller.
+func NewJanusGuardController(kubeclientset kubernetes.Interface, janusclientset clientset.Interface,
+	jgInformer informers.JanusGuardInformer, podInformer coreinformers.PodInformer,
+	endpointsInformer coreinformers.EndpointsInformer, janusdConnection *janusdConnection) *JanusGuardController {
 
 	// Create event broadcaster.
 	// Add januscontroller types to the default Kubernetes Scheme so Events can
@@ -162,42 +162,42 @@ func NewJanusWatcherController(kubeclientset kubernetes.Interface, janusclientse
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: januscontrollerAgentName})
 
-	jwc := &JanusWatcherController{
-		GroupVersionKind:      appsv1.SchemeGroupVersion.WithKind("JanusWatcher"),
+	jgc := &JanusGuardController{
+		GroupVersionKind:      appsv1.SchemeGroupVersion.WithKind("JanusGuard"),
 		kubeclientset:         kubeclientset,
 		janusclientset:        janusclientset,
 		expectations:          controller.NewUIDTrackingControllerExpectations(controller.NewControllerExpectations()),
-		jwLister:              jwInformer.Lister(),
-		jwListerSynced:        jwInformer.Informer().HasSynced,
+		jgLister:              jgInformer.Lister(),
+		jgListerSynced:        jgInformer.Informer().HasSynced,
 		podLister:             podInformer.Lister(),
 		podListerSynced:       podInformer.Informer().HasSynced,
 		endpointsLister:       endpointsInformer.Lister(),
 		endpointsListerSynced: endpointsInformer.Informer().HasSynced,
-		workqueue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "JanusWatchers"),
+		workqueue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "JanusGuards"),
 		recorder:              recorder,
 	}
 
 	glog.Info("Setting up event handlers")
-	// Set up an event handler for when JanusWatcher resources change.
-	jwInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    jwc.enqueueJanusWatcher,
-		UpdateFunc: jwc.updateJanusWatcher,
-		DeleteFunc: jwc.enqueueJanusWatcher,
+	// Set up an event handler for when JanusGuard resources change.
+	jgInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    jgc.enqueueJanusGuard,
+		UpdateFunc: jgc.updateJanusGuard,
+		DeleteFunc: jgc.enqueueJanusGuard,
 	})
 
 	// Set up an event handler for when Pod resources change.
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: jwc.addPod,
-		// This invokes the JanusWatcher for every pod change, eg: host
+		AddFunc: jgc.addPod,
+		// This invokes the JanusGuard for every pod change, eg: host
 		// assignment. Though this might seem like overkill the most frequent
-		// pod update is status, and the associated JanusWatcher will only list
+		// pod update is status, and the associated JanusGuard will only list
 		// from local storage, so it should be okay.
-		UpdateFunc: jwc.updatePod,
-		DeleteFunc: jwc.deletePod,
+		UpdateFunc: jgc.updatePod,
+		DeleteFunc: jgc.deletePod,
 	})
 
-	jwc.syncHandler = jwc.syncJanusWatcher
-	jwc.backoff = wait.Backoff{
+	jgc.syncHandler = jgc.syncJanusGuard
+	jgc.backoff = wait.Backoff{
 		Steps:    10,
 		Duration: 1 * time.Second,
 		Factor:   2.0,
@@ -207,37 +207,37 @@ func NewJanusWatcherController(kubeclientset kubernetes.Interface, janusclientse
 	// If specifying a janusdConnection for a daemon that is located
 	// out-of-cluster, initialize the janusd connection here, because we will
 	// not receive an addPod event where it is normally initialized.
-	jwc.janusdConnections = sync.Map{}
+	jgc.janusdConnections = sync.Map{}
 	if janusdConnection != nil {
-		jwc.janusdConnections.Store(janusdConnection.hostURL, janusdConnection)
-		jwc.janusdURL = janusdConnection.hostURL
+		jgc.janusdConnections.Store(janusdConnection.hostURL, janusdConnection)
+		jgc.janusdURL = janusdConnection.hostURL
 	}
 
-	return jwc
+	return jgc
 }
 
 // Run will set up the event handlers for types we are interested in, as well
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
-func (jwc *JanusWatcherController) Run(workers int, stopCh <-chan struct{}) error {
+func (jgc *JanusGuardController) Run(workers int, stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
-	defer jwc.workqueue.ShutDown()
+	defer jgc.workqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches.
-	glog.Info("Starting JanusWatcher controller")
-	defer glog.Info("Shutting down JanusWatcher controller")
+	glog.Info("Starting JanusGuard controller")
+	defer glog.Info("Shutting down JanusGuard controller")
 
 	// Wait for the caches to be synced before starting workers.
 	glog.Info("Waiting for informer caches to sync")
-	if ok := cache.WaitForCacheSync(stopCh, jwc.podListerSynced, jwc.endpointsListerSynced, jwc.jwListerSynced); !ok {
+	if ok := cache.WaitForCacheSync(stopCh, jgc.podListerSynced, jgc.endpointsListerSynced, jgc.jgListerSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
 	glog.Info("Starting workers")
-	// Launch two workers to process JanusWatcher resources.
+	// Launch two workers to process JanusGuard resources.
 	for i := 0; i < workers; i++ {
-		go wait.Until(jwc.runWorker, time.Second, stopCh)
+		go wait.Until(jgc.runWorker, time.Second, stopCh)
 	}
 	glog.Info("Started workers")
 	<-stopCh
@@ -246,78 +246,78 @@ func (jwc *JanusWatcherController) Run(workers int, stopCh <-chan struct{}) erro
 	return nil
 }
 
-// updateJanusWatcher is a callback for when a JanusWatcher is updated.
-func (jwc *JanusWatcherController) updateJanusWatcher(old, new interface{}) {
-	oldJW := old.(*janusv1alpha1.JanusWatcher)
-	newJW := new.(*janusv1alpha1.JanusWatcher)
+// updateJanusGuard is a callback for when a JanusGuard is updated.
+func (jgc *JanusGuardController) updateJanusGuard(old, new interface{}) {
+	oldjg := old.(*janusv1alpha1.JanusGuard)
+	newjg := new.(*janusv1alpha1.JanusGuard)
 
-	subjectsChanged := !reflect.DeepEqual(newJW.Spec.Subjects, oldJW.Spec.Subjects)
+	subjectsChanged := !reflect.DeepEqual(newjg.Spec.Subjects, oldjg.Spec.Subjects)
 
 	if subjectsChanged {
-		// Add new JanusWatcher definitions.
-		selector, err := metav1.LabelSelectorAsSelector(newJW.Spec.Selector)
+		// Add new JanusGuard definitions.
+		selector, err := metav1.LabelSelectorAsSelector(newjg.Spec.Selector)
 		if err != nil {
 			return
 		}
-		if selectedPods, err := jwc.podLister.Pods(newJW.Namespace).List(selector); err == nil {
+		if selectedPods, err := jgc.podLister.Pods(newjg.Namespace).List(selector); err == nil {
 			for _, pod := range selectedPods {
 				if !podutil.IsPodReady(pod) {
 					continue
 				}
-				go jwc.updatePodOnceValid(pod.Name, newJW)
+				go jgc.updatePodOnceValid(pod.Name, newjg)
 			}
 		}
 	}
 
-	jwc.enqueueJanusWatcher(newJW)
+	jgc.enqueueJanusGuard(newjg)
 }
 
-// addPod is called when a pod is created, enqueue the JanusWatcher that
+// addPod is called when a pod is created, enqueue the JanusGuard that
 // manages it and update its expectations.
-func (jwc *JanusWatcherController) addPod(obj interface{}) {
+func (jgc *JanusGuardController) addPod(obj interface{}) {
 	pod := obj.(*corev1.Pod)
 
 	if pod.DeletionTimestamp != nil {
 		// On a restart of the controller manager, it's possible a new pod
 		// shows up in a state that is already pending deletion. Prevent the
 		// pod from being a creation observation.
-		jwc.deletePod(pod)
+		jgc.deletePod(pod)
 		return
 	}
 
-	// If it has a JanusWatcher annotation that's all that matters.
-	if jwName, found := pod.Annotations[JanusWatcherAnnotationKey]; found {
-		jw, err := jwc.jwLister.JanusWatchers(pod.Namespace).Get(jwName)
+	// If it has a JanusGuard annotation that's all that matters.
+	if jgName, found := pod.Annotations[JanusGuardAnnotationKey]; found {
+		jg, err := jgc.jgLister.JanusGuards(pod.Namespace).Get(jgName)
 		if err != nil {
 			return
 		}
-		jwKey, err := controller.KeyFunc(jw)
+		jgKey, err := controller.KeyFunc(jg)
 		if err != nil {
 			return
 		}
 		glog.V(4).Infof("Pod %s created: %#v.", pod.Name, pod)
-		jwc.expectations.CreationObserved(jwKey)
-		jwc.enqueueJanusWatcher(jw)
+		jgc.expectations.CreationObserved(jgKey)
+		jgc.enqueueJanusGuard(jg)
 		return
 	}
 
 	// If this pod is a JanusD pod, we need to first initialize the connection
 	// to the gRPC server run on the daemon. Then a check is done on any pods
 	// running on the same node as the daemon, if they match our nodeSelector
-	// then immediately enqueue the JanusWatcher for additions.
+	// then immediately enqueue the JanusGuard for additions.
 	if label, _ := pod.Labels["daemon"]; label == "janusd" {
 		var hostURL string
 		// Run this function with a retry, to make sure we get a connection to
 		// the daemon pod. If we exhaust all attempts, process error
 		// accordingly.
-		if retryErr := retry.RetryOnConflict(jwc.backoff, func() (err error) {
-			po, err := jwc.podLister.Pods(janusNamespace).Get(pod.Name)
+		if retryErr := retry.RetryOnConflict(jgc.backoff, func() (err error) {
+			po, err := jgc.podLister.Pods(janusNamespace).Get(pod.Name)
 			if err != nil {
 				err = errorsutil.NewConflict(schema.GroupResource{Resource: "pods"},
 					po.Name, errors.New("could not find pod"))
 				return err
 			}
-			hostURL, err = jwc.getHostURL(po)
+			hostURL, err = jgc.getHostURL(po)
 			if err != nil {
 				err = errorsutil.NewConflict(schema.GroupResource{Resource: "pods"},
 					po.Name, errors.New("pod host is not available"))
@@ -332,13 +332,13 @@ func (jwc *JanusWatcherController) addPod(obj interface{}) {
 			if err != nil {
 				return err
 			}
-			jwc.janusdConnections.Store(hostURL, conn)
+			jgc.janusdConnections.Store(hostURL, conn)
 			return err
 		}); retryErr != nil {
 			return
 		}
 
-		allPods, err := jwc.podLister.List(labels.Everything())
+		allPods, err := jgc.podLister.List(labels.Everything())
 		if err != nil {
 			return
 		}
@@ -346,37 +346,37 @@ func (jwc *JanusWatcherController) addPod(obj interface{}) {
 			if po.Spec.NodeName != pod.Spec.NodeName {
 				continue
 			}
-			jws := jwc.getPodJanusWatchers(po)
-			if len(jws) == 0 {
+			jgs := jgc.getPodJanusGuards(po)
+			if len(jgs) == 0 {
 				continue
 			}
 
 			glog.V(4).Infof("Unannotated pod %s found: %#v.", po.Name, po)
-			for _, jw := range jws {
-				jwc.enqueueJanusWatcher(jw)
+			for _, jg := range jgs {
+				jgc.enqueueJanusGuard(jg)
 			}
 		}
 		return
 	}
 
-	// Get a list of all matching JanusWatchers and sync them. Do not observe
+	// Get a list of all matching JanusGuards and sync them. Do not observe
 	// creation because no controller should be waiting for an orphan.
-	jws := jwc.getPodJanusWatchers(pod)
-	if len(jws) == 0 {
+	jgs := jgc.getPodJanusGuards(pod)
+	if len(jgs) == 0 {
 		return
 	}
 
 	glog.V(4).Infof("Unannotated pod %s found: %#v.", pod.Name, pod)
-	for _, jw := range jws {
-		jwc.enqueueJanusWatcher(jw)
+	for _, jg := range jgs {
+		jgc.enqueueJanusGuard(jg)
 	}
 }
 
-// updatePod is called when a pod is updated. Figure out what JanusWatcher(s)
+// updatePod is called when a pod is updated. Figure out what JanusGuard(s)
 // manage it and wake them up. If the labels of the pod have changed we need to
-// Jwaken both the old and new JanusWatcher. old and new must be *corev1.Pod
+// jgaken both the old and new JanusGuard. old and new must be *corev1.Pod
 // types.
-func (jwc *JanusWatcherController) updatePod(old, new interface{}) {
+func (jgc *JanusGuardController) updatePod(old, new interface{}) {
 	newPod := new.(*corev1.Pod)
 	oldPod := old.(*corev1.Pod)
 
@@ -392,36 +392,36 @@ func (jwc *JanusWatcherController) updatePod(old, new interface{}) {
 		// When a pod is deleted gracefully it's deletion timestamp is first
 		// modified to reflect a grace period, and after such time has passed,
 		// the kubelet actually deletes it from the store. We receive an update
-		// for modification of the deletion timestamp and expect an jw to
-		// create more watchers asap, not wait until the kubelet actually
+		// for modification of the deletion timestamp and expect an jg to
+		// create more guards asap, not wait until the kubelet actually
 		// deletes the pod. This is different from the Phase of a pod changing,
-		// because an jw never initiates a phase change, and so is never asleep
+		// because an jg never initiates a phase change, and so is never asleep
 		// waiting for the same.
-		jwc.deletePod(newPod)
+		jgc.deletePod(newPod)
 		if labelChanged {
 			// We don't need to check the oldPod.DeletionTimestamp because
 			// DeletionTimestamp cannot be unset.
-			jwc.deletePod(oldPod)
+			jgc.deletePod(oldPod)
 		}
 		return
 	}
 
-	jws := jwc.getPodJanusWatchers(newPod)
-	for _, jw := range jws {
-		jwc.enqueueJanusWatcher(jw)
+	jgs := jgc.getPodJanusGuards(newPod)
+	for _, jg := range jgs {
+		jgc.enqueueJanusGuard(jg)
 	}
 }
 
-// deletePod is called when a pod is deleted. Enqueue the JanusWatcher that
-// watches the pod and update its expectations. obj could be an *v1.Pod, or a
+// deletePod is called when a pod is deleted. Enqueue the JanusGuard that
+// guards the pod and update its expectations. obj could be an *v1.Pod, or a
 // DeletionFinalStateUnknown marker item.
-func (jwc *JanusWatcherController) deletePod(obj interface{}) {
+func (jgc *JanusGuardController) deletePod(obj interface{}) {
 	pod, ok := obj.(*corev1.Pod)
 
 	// When a delete is dropped, the relist will notice a pod in the store not
 	// in the list, leading to the insertion of a tombstone object which
 	// contains the deleted key/value. Note that this value might be stale. If
-	// the pod changed labels the new JanusWatcher will not be woken up until
+	// the pod changed labels the new JanusGuard will not be woken up until
 	// the periodic resync.
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -436,33 +436,33 @@ func (jwc *JanusWatcherController) deletePod(obj interface{}) {
 		}
 	}
 
-	if jwName, found := pod.Annotations[JanusWatcherAnnotationKey]; found {
-		jw, err := jwc.jwLister.JanusWatchers(pod.Namespace).Get(jwName)
+	if jgName, found := pod.Annotations[JanusGuardAnnotationKey]; found {
+		jg, err := jgc.jgLister.JanusGuards(pod.Namespace).Get(jgName)
 		if err != nil {
 			return
 		}
-		jwKey, err := controller.KeyFunc(jw)
+		jgKey, err := controller.KeyFunc(jg)
 		if err != nil {
 			return
 		}
 		glog.V(4).Infof("Annotated pod %s/%s deleted through %v, timestamp %+v: %#v.",
 			pod.Namespace, pod.Name, runtime.GetCaller(), pod.DeletionTimestamp, pod)
-		jwc.expectations.DeletionObserved(jwKey, controller.PodKey(pod))
-		jwc.enqueueJanusWatcher(jw)
+		jgc.expectations.DeletionObserved(jgKey, controller.PodKey(pod))
+		jgc.enqueueJanusGuard(jg)
 	}
 
 	// If this pod is a JanusD pod, we need to first destroy the connection to
-	// the gRPC server run on the daemon. Then remove relevant JanusWatcher
+	// the gRPC server run on the daemon. Then remove relevant JanusGuard
 	// annotations from pods on the same node.
 	if label, _ := pod.Labels["daemon"]; label == "janusd" {
-		hostURL, err := jwc.getHostURL(pod)
+		hostURL, err := jgc.getHostURL(pod)
 		if err != nil {
 			return
 		}
 		// Destroy connections to gRPC server on daemon.
-		jwc.janusdConnections.Delete(hostURL)
+		jgc.janusdConnections.Delete(hostURL)
 
-		allPods, err := jwc.podLister.List(labels.Everything())
+		allPods, err := jgc.podLister.List(labels.Everything())
 		if err != nil {
 			return
 		}
@@ -470,61 +470,61 @@ func (jwc *JanusWatcherController) deletePod(obj interface{}) {
 			if po.Spec.NodeName != pod.Spec.NodeName {
 				continue
 			}
-			//delete(po.Annotations, JanusWatcherAnnotationKey)
-			updateAnnotations([]string{JanusWatcherAnnotationKey}, nil, po)
+			//delete(po.Annotations, JanusGuardAnnotationKey)
+			updateAnnotations([]string{JanusGuardAnnotationKey}, nil, po)
 		}
 		glog.V(4).Infof("Daemon pod %s/%s deleted through %v, timestamp %+v: %#v.",
 			pod.Namespace, pod.Name, runtime.GetCaller(), pod.DeletionTimestamp, pod)
 	}
 }
 
-// enqueueJanusWatcher takes a JanusWatcher resource and converts it into a
+// enqueueJanusGuard takes a JanusGuard resource and converts it into a
 // namespace/name string which is then put onto the workqueue. This method
-// should not be passed resources of any type other than JanusWatcher.
-func (jwc *JanusWatcherController) enqueueJanusWatcher(obj interface{}) {
+// should not be passed resources of any type other than JanusGuard.
+func (jgc *JanusGuardController) enqueueJanusGuard(obj interface{}) {
 	key, err := controller.KeyFunc(obj)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
 		return
 	}
-	jwc.workqueue.AddRateLimited(key)
+	jgc.workqueue.AddRateLimited(key)
 }
 
-// enqueueJanusWatcherAfter performs the same functionality as
-// enqueueJanusWatcher, except it is enqueued in `after` duration of time.
-func (jwc *JanusWatcherController) enqueueJanusWatcherAfter(obj interface{}, after time.Duration) {
+// enqueueJanusGuardAfter performs the same functionality as
+// enqueueJanusGuard, except it is enqueued in `after` duration of time.
+func (jgc *JanusGuardController) enqueueJanusGuardAfter(obj interface{}, after time.Duration) {
 	key, err := controller.KeyFunc(obj)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
 		return
 	}
-	jwc.workqueue.AddAfter(key, after)
+	jgc.workqueue.AddAfter(key, after)
 }
 
 // runWorker is a long-running function that will continually call the
 // processNextWorkItem function in order to read and process a message on the
 // workqueue.
-func (jwc *JanusWatcherController) runWorker() {
-	for jwc.processNextWorkItem() {
+func (jgc *JanusGuardController) runWorker() {
+	for jgc.processNextWorkItem() {
 	}
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
-func (jwc *JanusWatcherController) processNextWorkItem() bool {
-	obj, shutdown := jwc.workqueue.Get()
+func (jgc *JanusGuardController) processNextWorkItem() bool {
+	obj, shutdown := jgc.workqueue.Get()
 	if shutdown {
 		return false
 	}
 
-	// We wrap this block in a func so we can defer jwc.workqueue.Done.
+	// We wrap this block in a func so we can defer jgc.workqueue.Done.
 	err := func(obj interface{}) error {
 		// We call Done here so the workqueue knows we have finished processing
 		// this item. We also must remember to call Forget if we do not want
 		// this work item being re-queued. For example, we do not call Forget
 		// if a transient error occurs, instead the item is put back on the
 		// workqueue and attempted again after a back-off period.
-		defer jwc.workqueue.Done(obj)
+		defer jgc.workqueue.Done(obj)
 		var key string
 		var ok bool
 		// We expect strings to come off the workqueue. These are of the form
@@ -535,37 +535,37 @@ func (jwc *JanusWatcherController) processNextWorkItem() bool {
 			// As the item in the workqueue is actually invalid, we call Forget
 			// here else we'd go into a loop of attempting to process a work
 			// item that is invalid.
-			jwc.workqueue.Forget(obj)
+			jgc.workqueue.Forget(obj)
 			runtime.HandleError(fmt.Errorf("Expected string in workqueue but got %#v", obj))
 			return nil
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
-		// JanusWatcher resource to be synced.
-		if err := jwc.syncHandler(key); err != nil {
+		// JanusGuard resource to be synced.
+		if err := jgc.syncHandler(key); err != nil {
 			return fmt.Errorf("Error syncing '%s': %s", key, err.Error())
 		}
 		// Finally, if no error occurs we Forget this item so it does not get
 		// queued again until another change happens.
-		jwc.workqueue.Forget(obj)
+		jgc.workqueue.Forget(obj)
 		glog.V(4).Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
 	if err != nil {
 		runtime.HandleError(err)
-		jwc.workqueue.AddRateLimited(obj)
+		jgc.workqueue.AddRateLimited(obj)
 		return true
 	}
 	return true
 }
 
-// syncJanusWatcher compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the JanusWatcher
+// syncJanusGuard compares the actual state with the desired, and attempts to
+// converge the two. It then updates the Status block of the JanusGuard
 // resource with the current status of the resource.
-func (jwc *JanusWatcherController) syncJanusWatcher(key string) error {
+func (jgc *JanusGuardController) syncJanusGuard(key string) error {
 	startTime := time.Now()
 	defer func() {
-		glog.V(4).Infof("Finished syncing %v %q (%v)", jwc.Kind, key, time.Since(startTime))
+		glog.V(4).Infof("Finished syncing %v %q (%v)", jgc.Kind, key, time.Since(startTime))
 	}()
 
 	// Convert the namespace/name string into a distinct namespace and name.
@@ -575,45 +575,45 @@ func (jwc *JanusWatcherController) syncJanusWatcher(key string) error {
 		return nil
 	}
 
-	// Get the JanusWatcher resource with this namespace/name.
-	jw, err := jwc.jwLister.JanusWatchers(namespace).Get(name)
-	// The JanusWatcher resource may no longer exist, in which case we stop
+	// Get the JanusGuard resource with this namespace/name.
+	jg, err := jgc.jgLister.JanusGuards(namespace).Get(name)
+	// The JanusGuard resource may no longer exist, in which case we stop
 	// processing.
 	if errorsutil.IsNotFound(err) {
 		// @TODO: cleanup: delete annotations from any pods that have them
-		runtime.HandleError(fmt.Errorf("%v '%s' in work queue no longer exists", jwc.Kind, key))
-		jwc.expectations.DeleteExpectations(key)
+		runtime.HandleError(fmt.Errorf("%v '%s' in work queue no longer exists", jgc.Kind, key))
+		jgc.expectations.DeleteExpectations(key)
 		return nil
 	}
 	if err != nil {
 		return err
 	}
 
-	jwNeedsSync := jwc.expectations.SatisfiedExpectations(key)
+	jgNeedsSync := jgc.expectations.SatisfiedExpectations(key)
 
-	// Get the diff between all pods and pods that match the JanusWatch
+	// Get the diff between all pods and pods that match the JanusGuard
 	// selector.
 	var rmPods []*corev1.Pod
 	var addPods []*corev1.Pod
 
-	selector, err := metav1.LabelSelectorAsSelector(jw.Spec.Selector)
+	selector, err := metav1.LabelSelectorAsSelector(jg.Spec.Selector)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("Error converting pod selector to selector: %v", err))
 		return nil
 	}
-	selectedPods, err := jwc.podLister.Pods(jw.Namespace).List(selector)
+	selectedPods, err := jgc.podLister.Pods(jg.Namespace).List(selector)
 	if err != nil {
 		return err
 	}
 
-	// @TODO: Only get pods with annotation: JanusWatcherAnnotationKey.
-	allPods, err := jwc.podLister.Pods(jw.Namespace).List(labels.Everything())
+	// @TODO: Only get pods with annotation: JanusGuardAnnotationKey.
+	allPods, err := jgc.podLister.Pods(jg.Namespace).List(labels.Everything())
 	if err != nil {
 		return err
 	}
 
-	// Get current watch state from JanusD daemon.
-	watchStates, err := jwc.getWatchStates()
+	// Get current guard state from JanusD daemon.
+	guardStates, err := jgc.getGuardStates()
 	if err != nil {
 		return err
 	}
@@ -623,7 +623,7 @@ func (jwc *JanusWatcherController) syncJanusWatcher(key string) error {
 			!podutil.IsPodReady(pod) {
 			continue
 		}
-		if wsFound := jwc.isPodInWatchState(pod, watchStates); !wsFound {
+		if wsFound := jgc.isPodInGuardState(pod, guardStates); !wsFound {
 			var found bool
 			updatePodQueue.Range(func(k, v interface{}) bool {
 				// Check if pod is already in updatePodQueue.
@@ -641,7 +641,7 @@ func (jwc *JanusWatcherController) syncJanusWatcher(key string) error {
 	}
 
 	for _, pod := range allPods {
-		if wsFound := jwc.isPodInWatchState(pod, watchStates); !wsFound {
+		if wsFound := jgc.isPodInGuardState(pod, guardStates); !wsFound {
 			continue
 		}
 
@@ -653,7 +653,7 @@ func (jwc *JanusWatcherController) syncJanusWatcher(key string) error {
 			}
 		}
 		if pod.DeletionTimestamp != nil || !selFound {
-			if value, found := pod.Annotations[JanusWatcherAnnotationKey]; found && value == jw.Name {
+			if value, found := pod.Annotations[JanusGuardAnnotationKey]; found && value == jg.Name {
 				rmPods = append(rmPods, pod)
 				continue
 			}
@@ -661,64 +661,64 @@ func (jwc *JanusWatcherController) syncJanusWatcher(key string) error {
 	}
 
 	var manageSubjectsErr error
-	if (jwNeedsSync && jw.DeletionTimestamp == nil) ||
+	if (jgNeedsSync && jg.DeletionTimestamp == nil) ||
 		len(rmPods) > 0 ||
 		len(addPods) > 0 {
-		manageSubjectsErr = jwc.manageObserverPods(rmPods, addPods, jw)
+		manageSubjectsErr = jgc.manageObserverPods(rmPods, addPods, jg)
 	}
 
-	jw = jw.DeepCopy()
-	newStatus := calculateStatus(jw, selectedPods, manageSubjectsErr)
+	jg = jg.DeepCopy()
+	newStatus := calculateStatus(jg, selectedPods, manageSubjectsErr)
 
 	// Always updates status as pods come up or die.
-	updatedJW, err := updateJanusWatcherStatus(jwc.janusclientset.JanuscontrollerV1alpha1().JanusWatchers(jw.Namespace), jw, newStatus)
+	updatedjg, err := updateJanusGuardStatus(jgc.janusclientset.JanuscontrollerV1alpha1().JanusGuards(jg.Namespace), jg, newStatus)
 	if err != nil {
 		// Multiple things could lead to this update failing. Requeuing the
-		// janus watcher ensures. Returning an error causes a requeue without
+		// janus guard ensures. Returning an error causes a requeue without
 		// forcing a hotloop.
 		return err
 	}
 
-	// Resync the JanusWatcher after MinReadySeconds as a last line of defense
+	// Resync the JanusGuard after MinReadySeconds as a last line of defense
 	// to guard against clock-skew.
 	if manageSubjectsErr == nil &&
 		minReadySeconds > 0 &&
-		updatedJW.Status.WatchedPods != int32(len(selectedPods)) {
-		jwc.enqueueJanusWatcherAfter(updatedJW, time.Duration(minReadySeconds)*time.Second)
+		updatedjg.Status.GuardedPods != int32(len(selectedPods)) {
+		jgc.enqueueJanusGuardAfter(updatedjg, time.Duration(minReadySeconds)*time.Second)
 	}
 	return manageSubjectsErr
 }
 
-// manageObserverPods checks and updates observers for the given JanusWatcher.
-// It will requeue the JanusWatcher in case of an error while creating/deleting
+// manageObserverPods checks and updates observers for the given JanusGuard.
+// It will requeue the JanusGuard in case of an error while creating/deleting
 // pods.
-func (jwc *JanusWatcherController) manageObserverPods(rmPods []*corev1.Pod, addPods []*corev1.Pod, jw *janusv1alpha1.JanusWatcher) error {
-	jwKey, err := controller.KeyFunc(jw)
+func (jgc *JanusGuardController) manageObserverPods(rmPods []*corev1.Pod, addPods []*corev1.Pod, jg *janusv1alpha1.JanusGuard) error {
+	jgKey, err := controller.KeyFunc(jg)
 	if err != nil {
-		runtime.HandleError(fmt.Errorf("Couldn't get key for %v %#v: %v", jwc.Kind, jw, err))
+		runtime.HandleError(fmt.Errorf("Couldn't get key for %v %#v: %v", jgc.Kind, jg, err))
 		return nil
 	}
 
 	if len(rmPods) > 0 {
-		jwc.expectations.ExpectDeletions(jwKey, getPodKeys(rmPods))
-		glog.Infof("Too many watchers for %v %s/%s, deleting %d", jwc.Kind, jw.Namespace, jw.Name, len(rmPods))
+		jgc.expectations.ExpectDeletions(jgKey, getPodKeys(rmPods))
+		glog.Infof("Too many guards for %v %s/%s, deleting %d", jgc.Kind, jg.Namespace, jg.Name, len(rmPods))
 	}
 	if len(addPods) > 0 {
-		jwc.expectations.ExpectCreations(jwKey, len(addPods))
-		glog.Infof("Too few watchers for %v %s/%s, creating %d", jwc.Kind, jw.Namespace, jw.Name, len(addPods))
+		jgc.expectations.ExpectCreations(jgKey, len(addPods))
+		glog.Infof("Too few guards for %v %s/%s, creating %d", jgc.Kind, jg.Namespace, jg.Name, len(addPods))
 	}
 
 	var podsToUpdate []*corev1.Pod
 
 	for _, pod := range rmPods {
-		if _, found := pod.Annotations[JanusWatcherAnnotationKey]; found {
+		if _, found := pod.Annotations[JanusGuardAnnotationKey]; found {
 			cids := getPodContainerIDs(pod)
 			if len(cids) > 0 {
-				hostURL, err := jwc.getHostURLFromSiblingPod(pod)
+				hostURL, err := jgc.getHostURLFromSiblingPod(pod)
 				if err != nil {
 					return err
 				}
-				fc, err := jwc.getJanusdConnection(hostURL)
+				fc, err := jgc.getJanusdConnection(hostURL)
 				if err != nil {
 					return err
 				}
@@ -726,7 +726,7 @@ func (jwc *JanusWatcherController) manageObserverPods(rmPods []*corev1.Pod, addP
 					return fmt.Errorf("janusd connection has no handle %#v", fc)
 				}
 
-				if err := fc.RemoveJanusdWatcher(&pb.JanusdConfig{
+				if err := fc.RemoveJanusdGuard(&pb.JanusdConfig{
 					NodeName: pod.Spec.NodeName,
 					PodName:  pod.Name,
 					Pid:      fc.handle.Pid,
@@ -734,12 +734,12 @@ func (jwc *JanusWatcherController) manageObserverPods(rmPods []*corev1.Pod, addP
 					return err
 				}
 
-				jwc.expectations.DeletionObserved(jwKey, controller.PodKey(pod))
-				jwc.recorder.Eventf(jw, corev1.EventTypeNormal, SuccessRemoved, MessageResourceRemoved, pod.Spec.NodeName)
+				jgc.expectations.DeletionObserved(jgKey, controller.PodKey(pod))
+				jgc.recorder.Eventf(jg, corev1.EventTypeNormal, SuccessRemoved, MessageResourceRemoved, pod.Spec.NodeName)
 			}
 		}
 
-		err := updateAnnotations([]string{JanusWatcherAnnotationKey}, nil, pod)
+		err := updateAnnotations([]string{JanusGuardAnnotationKey}, nil, pod)
 		if err != nil {
 			return err
 		}
@@ -747,9 +747,9 @@ func (jwc *JanusWatcherController) manageObserverPods(rmPods []*corev1.Pod, addP
 	}
 
 	for _, pod := range addPods {
-		go jwc.updatePodOnceValid(pod.Name, jw)
+		go jgc.updatePodOnceValid(pod.Name, jg)
 
-		err := updateAnnotations(nil, map[string]string{JanusWatcherAnnotationKey: jw.Name}, pod)
+		err := updateAnnotations(nil, map[string]string{JanusGuardAnnotationKey: jg.Name}, pod)
 		if err != nil {
 			return err
 		}
@@ -760,8 +760,8 @@ func (jwc *JanusWatcherController) manageObserverPods(rmPods []*corev1.Pod, addP
 	}
 
 	for _, pod := range podsToUpdate {
-		updatePodWithRetries(jwc.kubeclientset.CoreV1().Pods(pod.Namespace), jwc.podLister,
-			jw.Namespace, pod.Name, func(po *corev1.Pod) error {
+		updatePodWithRetries(jgc.kubeclientset.CoreV1().Pods(pod.Namespace), jgc.podLister,
+			jg.Namespace, pod.Name, func(po *corev1.Pod) error {
 				po.Annotations = pod.Annotations
 				return nil
 			})
@@ -770,47 +770,47 @@ func (jwc *JanusWatcherController) manageObserverPods(rmPods []*corev1.Pod, addP
 	return nil
 }
 
-// getPodJanusWatchers returns a list of JanusWatchers matching the given pod.
-func (jwc *JanusWatcherController) getPodJanusWatchers(pod *corev1.Pod) []*janusv1alpha1.JanusWatcher {
+// getPodJanusGuards returns a list of JanusGuards matching the given pod.
+func (jgc *JanusGuardController) getPodJanusGuards(pod *corev1.Pod) []*janusv1alpha1.JanusGuard {
 	if len(pod.Labels) == 0 {
-		glog.V(4).Infof("no JanusWatchers found for pod %v because it has no labels", pod.Name)
+		glog.V(4).Infof("no JanusGuards found for pod %v because it has no labels", pod.Name)
 		return nil
 	}
 
-	list, err := jwc.jwLister.JanusWatchers(pod.Namespace).List(labels.Everything())
+	list, err := jgc.jgLister.JanusGuards(pod.Namespace).List(labels.Everything())
 	if err != nil {
 		return nil
 	}
 
-	var jws []*janusv1alpha1.JanusWatcher
-	for _, jw := range list {
-		if jw.Namespace != pod.Namespace {
+	var jgs []*janusv1alpha1.JanusGuard
+	for _, jg := range list {
+		if jg.Namespace != pod.Namespace {
 			continue
 		}
-		selector, err := metav1.LabelSelectorAsSelector(jw.Spec.Selector)
+		selector, err := metav1.LabelSelectorAsSelector(jg.Spec.Selector)
 		if err != nil {
 			runtime.HandleError(fmt.Errorf("invalid selector: %v", err))
 			return nil
 		}
-		// If a JanusWatcher with a nil or empty selector creeps in, it should
+		// If a JanusGuard with a nil or empty selector creeps in, it should
 		// match nothing, not everything.
 		if selector.Empty() ||
 			!selector.Matches(labels.Set(pod.Labels)) {
 			continue
 		}
-		jws = append(jws, jw)
+		jgs = append(jgs, jg)
 	}
 
-	if len(jws) == 0 {
-		glog.V(4).Infof("could not find JanusWatcher for pod %s in namespace %s with labels: %v", pod.Name, pod.Namespace, pod.Labels)
+	if len(jgs) == 0 {
+		glog.V(4).Infof("could not find JanusGuard for pod %s in namespace %s with labels: %v", pod.Name, pod.Namespace, pod.Labels)
 		return nil
 	}
-	if len(jws) > 1 {
+	if len(jgs) > 1 {
 		// ControllerRef will ensure we don't do anything crazy, but more than
 		//one item in this list nevertheless constitutes user error.
-		runtime.HandleError(fmt.Errorf("user error; more than one %v is selecting pods with labels: %+v", jwc.Kind, pod.Labels))
+		runtime.HandleError(fmt.Errorf("user error; more than one %v is selecting pods with labels: %+v", jgc.Kind, pod.Labels))
 	}
-	return jws
+	return jgs
 }
 
 // getPodKeys returns a list of pod key strings from array of pod objects.
@@ -823,20 +823,20 @@ func getPodKeys(pods []*corev1.Pod) []string {
 }
 
 // updatePodOnceValid first retries getting the pod hostURL to connect to the
-// JanusD gRPC server. Then it retries adding a new JanusD watcher by calling
-// the gRPC server CreateWatch function; on success it updates the appropriate
-// JanusWatcher annotations so we can mark it now "watched".
-func (jwc *JanusWatcherController) updatePodOnceValid(podName string, jw *janusv1alpha1.JanusWatcher) {
+// JanusD gRPC server. Then it retries adding a new JanusD guard by calling
+// the gRPC server CreateGuard function; on success it updates the appropriate
+// JanusGuard annotations so we can mark it now "guarded".
+func (jgc *JanusGuardController) updatePodOnceValid(podName string, jg *janusv1alpha1.JanusGuard) {
 	var cids []string
 	var nodeName, hostURL string
 
 	// Run this function with a retry, to make sure we get a connection to the
 	// daemon pod. If we exhaust all attempts, process error accordingly.
-	if retryErr := retry.RetryOnConflict(jwc.backoff, func() (err error) {
+	if retryErr := retry.RetryOnConflict(jgc.backoff, func() (err error) {
 		// Be sure to clear all slice elements first in case of a retry.
 		cids = cids[:0]
 
-		pod, err := jwc.podLister.Pods(jw.Namespace).Get(podName)
+		pod, err := jgc.podLister.Pods(jg.Namespace).Get(podName)
 		if err != nil {
 			return err
 		}
@@ -862,7 +862,7 @@ func (jwc *JanusWatcherController) updatePodOnceValid(podName string, jw *janusv
 		}
 
 		var hostErr error
-		hostURL, hostErr = jwc.getHostURLFromSiblingPod(pod)
+		hostURL, hostErr = jgc.getHostURLFromSiblingPod(pod)
 		if hostErr != nil || hostURL == "" {
 			err = errorsutil.NewConflict(schema.GroupResource{Resource: "pods"},
 				pod.Name, errors.New("pod host is not available"))
@@ -875,8 +875,8 @@ func (jwc *JanusWatcherController) updatePodOnceValid(podName string, jw *janusv
 	// Run this function with a retry, to make sure we get a successful
 	// response from the daemon. If we exhaust all attempts, process error
 	// accordingly.
-	if retryErr := retry.RetryOnConflict(jwc.backoff, func() (err error) {
-		pod, err := jwc.podLister.Pods(jw.Namespace).Get(podName)
+	if retryErr := retry.RetryOnConflict(jgc.backoff, func() (err error) {
+		pod, err := jgc.podLister.Pods(jg.Namespace).Get(podName)
 		if err != nil {
 			return err
 		}
@@ -884,25 +884,25 @@ func (jwc *JanusWatcherController) updatePodOnceValid(podName string, jw *janusv
 			return fmt.Errorf("pod is being deleted %v", pod.Name)
 		}
 
-		fc, err := jwc.getJanusdConnection(hostURL)
+		fc, err := jgc.getJanusdConnection(hostURL)
 		if err != nil {
 			return errorsutil.NewConflict(schema.GroupResource{Resource: "nodes"},
 				nodeName, errors.New("failed to get janusd connection"))
 		}
-		if handle, err := fc.AddJanusdWatcher(&pb.JanusdConfig{
-			Name:     jw.Name,
+		if handle, err := fc.AddJanusdGuard(&pb.JanusdConfig{
+			Name:     jg.Name,
 			NodeName: nodeName,
 			PodName:  pod.Name,
 			Cid:      cids,
-			Subject:  jwc.getJanusWatcherSubjects(jw),
+			Subject:  jgc.getJanusGuardSubjects(jg),
 		}); err == nil {
 			fc.handle = handle
 		}
 		return err
 	}); retryErr != nil {
-		updatePodWithRetries(jwc.kubeclientset.CoreV1().Pods(jw.Namespace), jwc.podLister,
-			jw.Namespace, podName, func(po *corev1.Pod) error {
-				pod, err := jwc.podLister.Pods(jw.Namespace).Get(podName)
+		updatePodWithRetries(jgc.kubeclientset.CoreV1().Pods(jg.Namespace), jgc.podLister,
+			jg.Namespace, podName, func(po *corev1.Pod) error {
+				pod, err := jgc.podLister.Pods(jg.Namespace).Get(podName)
 				if err != nil {
 					return err
 				}
@@ -911,30 +911,30 @@ func (jwc *JanusWatcherController) updatePodOnceValid(podName string, jw *janusv
 			})
 	}
 
-	go jwc.removePodFromUpdateQueue(podName)
+	go jgc.removePodFromUpdateQueue(podName)
 
-	jwKey, err := controller.KeyFunc(jw)
+	jgKey, err := controller.KeyFunc(jg)
 	if err != nil {
 		return
 	}
-	jwc.expectations.CreationObserved(jwKey)
-	jwc.recorder.Eventf(jw, corev1.EventTypeNormal, SuccessAdded, MessageResourceAdded, nodeName)
+	jgc.expectations.CreationObserved(jgKey)
+	jgc.recorder.Eventf(jg, corev1.EventTypeNormal, SuccessAdded, MessageResourceAdded, nodeName)
 }
 
 // getHostURL constructs a URL from the pod's hostIP and hard-coded JanusD
 // port.  The pod specified in this function is assumed to be a daemon pod.
 // If janusdURL was specified to the controller, to connect to an
 // out-of-cluster daemon, use this instead.
-func (jwc *JanusWatcherController) getHostURL(pod *corev1.Pod) (string, error) {
-	if jwc.janusdURL != "" {
-		return jwc.janusdURL, nil
+func (jgc *JanusGuardController) getHostURL(pod *corev1.Pod) (string, error) {
+	if jgc.janusdURL != "" {
+		return jgc.janusdURL, nil
 	}
 
 	if pod.Status.PodIP == "" {
 		return "", fmt.Errorf("cannot locate janusd pod on node %v", pod.Spec.NodeName)
 	}
 
-	endpoint, err := jwc.endpointsLister.Endpoints(janusNamespace).Get(janusdService)
+	endpoint, err := jgc.endpointsLister.Endpoints(janusNamespace).Get(janusdService)
 	if err != nil {
 		return "", err
 	}
@@ -964,22 +964,22 @@ func (jwc *JanusWatcherController) getHostURL(pod *corev1.Pod) (string, error) {
 // pod specified in this function is assumed to be a non-daemon pod. If
 // janusdURL was specified to the controller, to connect to an out-of-cluster
 // daemon, use this instead.
-func (jwc *JanusWatcherController) getHostURLFromSiblingPod(pod *corev1.Pod) (string, error) {
-	if jwc.janusdURL != "" {
-		return jwc.janusdURL, nil
+func (jgc *JanusGuardController) getHostURLFromSiblingPod(pod *corev1.Pod) (string, error) {
+	if jgc.janusdURL != "" {
+		return jgc.janusdURL, nil
 	}
 
 	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: janusdSelector})
 	if err != nil {
 		return "", err
 	}
-	daemonPods, err := jwc.podLister.Pods(janusNamespace).List(selector)
+	daemonPods, err := jgc.podLister.Pods(janusNamespace).List(selector)
 	if err != nil {
 		return "", err
 	}
 	for _, daemonPod := range daemonPods {
 		if daemonPod.Spec.NodeName == pod.Spec.NodeName {
-			hostURL, err := jwc.getHostURL(daemonPod)
+			hostURL, err := jgc.getHostURL(daemonPod)
 			if err != nil {
 				return "", err
 			}
@@ -990,12 +990,12 @@ func (jwc *JanusWatcherController) getHostURLFromSiblingPod(pod *corev1.Pod) (st
 	return "", fmt.Errorf("cannot locate janusd pod on node %v", pod.Spec.NodeName)
 }
 
-// getJanusWatcherSubjects is a helper function that given a JanusWatcher,
-// constructs a list of Subjects to be used when creating a new JanusD watcher.
-func (jwc *JanusWatcherController) getJanusWatcherSubjects(jw *janusv1alpha1.JanusWatcher) []*pb.JanusWatcherSubject {
-	var subjects []*pb.JanusWatcherSubject
-	for _, s := range jw.Spec.Subjects {
-		subjects = append(subjects, &pb.JanusWatcherSubject{
+// getJanusGuardSubjects is a helper function that given a JanusGuard,
+// constructs a list of Subjects to be used when creating a new JanusD guard.
+func (jgc *JanusGuardController) getJanusGuardSubjects(jg *janusv1alpha1.JanusGuard) []*pb.JanusGuardSubject {
+	var subjects []*pb.JanusGuardSubject
+	for _, s := range jg.Spec.Subjects {
+		subjects = append(subjects, &pb.JanusGuardSubject{
 			Allow: s.Allow,
 			Deny:  s.Deny,
 			Event: s.Events,
@@ -1005,67 +1005,67 @@ func (jwc *JanusWatcherController) getJanusWatcherSubjects(jw *janusv1alpha1.Jan
 }
 
 // getJanusdConnection returns a janusdConnection object given a hostURL.
-func (jwc *JanusWatcherController) getJanusdConnection(hostURL string) (*janusdConnection, error) {
-	if fc, ok := jwc.janusdConnections.Load(hostURL); ok == true {
+func (jgc *JanusGuardController) getJanusdConnection(hostURL string) (*janusdConnection, error) {
+	if fc, ok := jgc.janusdConnections.Load(hostURL); ok == true {
 		return fc.(*janusdConnection), nil
 	}
 	return nil, fmt.Errorf("could not connect to janusd at hostURL %v", hostURL)
 }
 
-// GetWatchStates is a helper function that gets all the current watch states
+// GetGuardStates is a helper function that gets all the current guard states
 // from every JanusD pod running in the clutser. This is used in the
 // syncHandler to run exactly once each sync.
-func (jwc *JanusWatcherController) getWatchStates() ([][]*pb.JanusdHandle, error) {
-	var watchStates [][]*pb.JanusdHandle
+func (jgc *JanusGuardController) getGuardStates() ([][]*pb.JanusdHandle, error) {
+	var guardStates [][]*pb.JanusdHandle
 
 	// If specifying a janusdURL for a daemon that is located out-of-cluster,
-	// we assume a single JanusD pod in the cluster; get the watch state of
+	// we assume a single JanusD pod in the cluster; get the guard state of
 	// this daemon pod only.
-	if jwc.janusdURL != "" {
-		fc, err := jwc.getJanusdConnection(jwc.janusdURL)
+	if jgc.janusdURL != "" {
+		fc, err := jgc.getJanusdConnection(jgc.janusdURL)
 		if err != nil {
 			return nil, err
 		}
-		ws, err := fc.GetWatchState()
+		ws, err := fc.GetGuardState()
 		if err != nil {
 			return nil, err
 		}
-		watchStates = append(watchStates, ws)
-		return watchStates, nil
+		guardStates = append(guardStates, ws)
+		return guardStates, nil
 	}
 
 	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: janusdSelector})
 	if err != nil {
 		return nil, err
 	}
-	daemonPods, err := jwc.podLister.Pods(janusNamespace).List(selector)
+	daemonPods, err := jgc.podLister.Pods(janusNamespace).List(selector)
 	if err != nil {
 		return nil, err
 	}
 	for _, pod := range daemonPods {
-		hostURL, err := jwc.getHostURL(pod)
+		hostURL, err := jgc.getHostURL(pod)
 		if err != nil {
 			continue
 		}
-		fc, err := jwc.getJanusdConnection(hostURL)
+		fc, err := jgc.getJanusdConnection(hostURL)
 		if err != nil {
 			return nil, err
 		}
-		ws, err := fc.GetWatchState()
+		ws, err := fc.GetGuardState()
 		if err != nil {
 			continue
 		}
-		watchStates = append(watchStates, ws)
+		guardStates = append(guardStates, ws)
 	}
-	return watchStates, nil
+	return guardStates, nil
 }
 
-// isPodInWatchState is a helper function that given a pod and list of watch
+// isPodInGuardState is a helper function that given a pod and list of guard
 // states, find if pod name appears anywhere in the list.
-func (jwc *JanusWatcherController) isPodInWatchState(pod *corev1.Pod, watchStates [][]*pb.JanusdHandle) bool {
+func (jgc *JanusGuardController) isPodInGuardState(pod *corev1.Pod, guardStates [][]*pb.JanusdHandle) bool {
 	var found bool
-	for _, watchState := range watchStates {
-		for _, ws := range watchState {
+	for _, guardState := range guardStates {
+		for _, ws := range guardState {
 			if pod.Name == ws.PodName {
 				found = true
 				break
@@ -1078,6 +1078,6 @@ func (jwc *JanusWatcherController) isPodInWatchState(pod *corev1.Pod, watchState
 // removePodFromUpdateQueue is a helper function that given a pod name, remove
 // it from the update pod queue in order to be marked for a new update in the
 // future.
-func (jwc *JanusWatcherController) removePodFromUpdateQueue(podName string) {
+func (jgc *JanusGuardController) removePodFromUpdateQueue(podName string) {
 	updatePodQueue.Delete(podName)
 }

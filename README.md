@@ -3,7 +3,7 @@
 [![go report](https://goreportcard.com/badge/github.com/clustergarage/janus-controller?style=flat-square)](https://goreportcard.com/report/github.com/clustergarage/janus-controller)
 [![Docker Automated build](https://img.shields.io/docker/build/clustergarage/janus-controller.svg?style=flat-square)](https://hub.docker.com/r/clustergarage/janus-controller)
 
-This repository implements a Kubernetes controller for watching JanusWatcher resources as defined with a CustomResourceDefinition.
+This repository implements a Kubernetes controller for watching JanusGuard resources as defined with a CustomResourceDefinition.
 
 **Note**: `go get` or `go mod` this package as `clustergarage.io/janus-controller`
 
@@ -15,9 +15,9 @@ This controller is used primarily to communicate between a running cluster and t
 
 Included within the controller are some mechanisms to speak to the Kubernetes API and the daemons to:
 
-- Gain insights into pods, endpoints, and custom JanusWatcher CRDs being added, updated, and deleted.
-- Perform current daemon state check of watchers that it is currently hosting.
-- Notify the need to create and delete a filesystem watcher.
+- Gain insights into pods, endpoints, and custom JanusGuard CRDs being added, updated, and deleted.
+- Perform current daemon state check of guards that it is currently hosting.
+- Notify the need to create and delete a filesystem guard.
 - Perform health checks for readiness and liveness probes in Kubernetes.
 
 ## Usage
@@ -70,7 +70,7 @@ go run . -kubeconfig=$HOME/.kube/config \
   -tls-server-name localhost
 ```
 
-**Warning**: When running the controller and daemon out-of-cluster in a VM-based Kubernetes context, the daemon will fail to locate the PID from the container ID through numerous cgroup checks and will be unable to start any watchers. When using Minikube, you can `minikube mount` the daemon folder, `minikube ssh` into it and run it inside the VM. Then point the controller at the IP/Port running inside the VM with the `-janusd` flag.
+**Warning**: When running the controller and daemon out-of-cluster in a VM-based Kubernetes context, the daemon will fail to locate the PID from the container ID through numerous cgroup checks and will be unable to start any guards. When using Minikube, you can `minikube mount` the daemon folder, `minikube ssh` into it and run it inside the VM. Then point the controller at the IP/Port running inside the VM with the `-janusd` flag.
 
 ---
 
@@ -174,15 +174,15 @@ golint pkg/controller/*
 
 ## Custom Resource Definition
 
-Each instance of the JanusWatcher custom resource has an attached `Spec`, which is defined via a `struct{}` to provide data format validation. In practice, this `Spec` is arbitrary key-value data that specifies the configuration/behavior of the resource.
+Each instance of the JanusGuard custom resource has an attached `Spec`, which is defined via a `struct{}` to provide data format validation. In practice, this `Spec` is arbitrary key-value data that specifies the configuration/behavior of the resource.
 
 ```go
-type JanusWatcherSpec struct {
+type JanusGuardSpec struct {
   Selector  *metav1.LabelSelector  `json:"selector"`
-  Subjects  []*JanusWatcherSubject `json:"subjects"`
+  Subjects  []*JanusGuardSubject `json:"subjects"`
 }
 
-type JanusWatcherSubject struct {
+type JanusGuardSubject struct {
   Allow  []string `json:"allow"`
   Deny   []string `json:"deny"`
   Events []string `json:"events"`
@@ -214,7 +214,7 @@ Changes should not be made manually to these files. When updating the definition
 You can clean up the created CustomResourceDefinition with:
 
 ```
-kubectl delete crd januswatchers.januscontroller.clustergarage.io
+kubectl delete crd janusguards.januscontroller.clustergarage.io
 ```
 
 ## Documentation

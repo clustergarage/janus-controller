@@ -2,4 +2,4 @@
 
 package v1alpha1
 
-type JanusWatcherExpansion interface{}
+type JanusGuardExpansion interface{}

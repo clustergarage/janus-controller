@@ -6,6 +6,8 @@ github.com/boltdb/bolt v1.3.1/go.mod h1:clJnj/oiGkjum5o1McbSZDSLxVThjynRyGBgiAx2
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/clustergarage/janus-proto v0.0.0-20181202030811-ebb203389f14 h1:wR5XEz17BX8M4bpURQQTPAEIsNCiPyd1g0DgaCIiAgE=
 github.com/clustergarage/janus-proto v0.0.0-20181202030811-ebb203389f14/go.mod h1:LUMVYg0a6Xej5fcWGTBhAcTh5OBiC2/msab1e6+z9Jg=
+github.com/clustergarage/janus-proto v0.0.0-20181203161952-9e94f6b2cdac h1:aCMWzVTTdAYSWDY3O0vcD88w0xGpVdoDZhzLgLnWZc0=
+github.com/clustergarage/janus-proto v0.0.0-20181203161952-9e94f6b2cdac/go.mod h1:LUMVYg0a6Xej5fcWGTBhAcTh5OBiC2/msab1e6+z9Jg=
 github.com/coreos/bbolt v1.3.0 h1:HIgH5xUWXT914HCI671AxuTTqjj64UOFr7pHn48LUTI=
 github.com/coreos/bbolt v1.3.0/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/coreos/etcd v3.3.9+incompatible h1:/pWnp1yEff0z+vBEOBFLZZ22Ux5xoVozEe7X0VFyRNo=

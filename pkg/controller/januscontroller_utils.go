@@ -52,7 +52,7 @@ var (
 )
 
 // janusdConnection defines a JanusD gRPC server URL and a gRPC client to
-// connect to in order to make add and remove watcher calls, as well as getting
+// connect to in order to make add and remove guard calls, as well as getting
 // the current state of the daemon to keep the controller<-->daemon in sync.
 type janusdConnection struct {
 	hostURL string
@@ -120,114 +120,113 @@ func NewJanusdConnection(hostURL string, opts grpc.DialOption, client ...pb.Janu
 	return fc, nil
 }
 
-// AddJanusdWatcher sends a message to the JanusD daemon to create a new
-// watcher.
-func (fc *janusdConnection) AddJanusdWatcher(config *pb.JanusdConfig) (*pb.JanusdHandle, error) {
-	glog.Infof("Sending CreateWatch call to JanusD daemon, host: %s, request: %#v)", fc.hostURL, config)
+// AddJanusdGuard sends a message to the JanusD daemon to create a new guard.
+func (fc *janusdConnection) AddJanusdGuard(config *pb.JanusdConfig) (*pb.JanusdHandle, error) {
+	glog.Infof("Sending CreateGuard call to JanusD daemon, host: %s, request: %#v)", fc.hostURL, config)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	defer ctx.Done()
 
-	response, err := fc.client.CreateWatch(ctx, config)
-	glog.Infof("Received CreateWatch response: %#v", response)
+	response, err := fc.client.CreateGuard(ctx, config)
+	glog.Infof("Received CreateGuard response: %#v", response)
 	if err != nil || response.NodeName == "" {
 		return nil, errors.NewConflict(schema.GroupResource{Resource: "nodes"},
-			config.NodeName, fmt.Errorf(fmt.Sprintf("janusd::CreateWatch failed: %v", err)))
+			config.NodeName, fmt.Errorf(fmt.Sprintf("janusd::CreateGuard failed: %v", err)))
 	}
 	return response, nil
 }
 
-// RemoveJanusdWatcher sends a message to the JanusD daemon to remove an
-// existing watcher.
-func (fc *janusdConnection) RemoveJanusdWatcher(config *pb.JanusdConfig) error {
-	glog.Infof("Sending DestroyWatch call to JanusD daemon, host: %s, request: %#v", fc.hostURL, config)
+// RemoveJanusdGuard sends a message to the JanusD daemon to remove an existing
+// guard.
+func (fc *janusdConnection) RemoveJanusdGuard(config *pb.JanusdConfig) error {
+	glog.Infof("Sending DestroyGuard call to JanusD daemon, host: %s, request: %#v", fc.hostURL, config)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	defer ctx.Done()
 
-	_, err := fc.client.DestroyWatch(ctx, config)
+	_, err := fc.client.DestroyGuard(ctx, config)
 	if err != nil {
 		return errors.NewConflict(schema.GroupResource{Resource: "nodes"},
-			config.NodeName, fmt.Errorf(fmt.Sprintf("janusd::DestroyWatch failed: %v", err)))
+			config.NodeName, fmt.Errorf(fmt.Sprintf("janusd::DestroyGuard failed: %v", err)))
 	}
 	return nil
 }
 
-// GetWatchState sends a message to the JanusD daemon to return the current
-// state of the watchers being watched via inotify.
-func (fc *janusdConnection) GetWatchState() ([]*pb.JanusdHandle, error) {
+// GetGuardState sends a message to the JanusD daemon to return the current
+// state of the guards being marked via fanotify.
+func (fc *janusdConnection) GetGuardState() ([]*pb.JanusdHandle, error) {
 	ctx := context.Background()
 	defer ctx.Done()
 
-	var watchers []*pb.JanusdHandle
-	stream, err := fc.client.GetWatchState(ctx, &pb.Empty{})
+	var guards []*pb.JanusdHandle
+	stream, err := fc.client.GetGuardState(ctx, &pb.Empty{})
 	if err != nil {
 		return nil, errors.NewConflict(schema.GroupResource{Resource: "nodes"},
-			fc.hostURL, fmt.Errorf(fmt.Sprintf("janusd::GetWatchState failed: %v", err)))
+			fc.hostURL, fmt.Errorf(fmt.Sprintf("janusd::GetGuardState failed: %v", err)))
 	}
 	for {
-		watch, err := stream.Recv()
+		guard, err := stream.Recv()
 		if err == io.EOF || err != nil {
 			break
 		}
-		watchers = append(watchers, watch)
+		guards = append(guards, guard)
 	}
-	return watchers, nil
+	return guards, nil
 }
 
 // updatePodFunc defines an function signature to be passed into
 // updatePodWithRetries.
 type updatePodFunc func(pod *corev1.Pod) error
 
-// updateJanusWatcherStatus updates the status of the specified JanusWatcher
+// updateJanusGuardStatus updates the status of the specified JanusGuard
 // object.
-func updateJanusWatcherStatus(c janusv1alpha1client.JanusWatcherInterface, jw *janusv1alpha1.JanusWatcher,
-	newStatus janusv1alpha1.JanusWatcherStatus) (*janusv1alpha1.JanusWatcher, error) {
+func updateJanusGuardStatus(c janusv1alpha1client.JanusGuardInterface, jg *janusv1alpha1.JanusGuard,
+	newStatus janusv1alpha1.JanusGuardStatus) (*janusv1alpha1.JanusGuard, error) {
 
-	// This is the steady state. It happens when the JanusWatcher doesn't have
+	// This is the steady state. It happens when the JanusGuard doesn't have
 	// any expectations, since we do a periodic relist every 30s. If the
 	// generations differ but the subjects are the same, a caller might have
 	// resized to the same subject count.
-	if jw.Status.ObservablePods == newStatus.ObservablePods &&
-		jw.Status.WatchedPods == newStatus.WatchedPods &&
-		jw.Generation == jw.Status.ObservedGeneration {
-		return jw, nil
+	if jg.Status.ObservablePods == newStatus.ObservablePods &&
+		jg.Status.GuardedPods == newStatus.GuardedPods &&
+		jg.Generation == jg.Status.ObservedGeneration {
+		return jg, nil
 	}
 	// Save the generation number we acted on, otherwise we might wrongfully
 	// indicate that we've seen a spec update when we retry.
 	// @TODO: This can clobber an update if we allow multiple agents to write
 	// to the same status.
-	newStatus.ObservedGeneration = jw.Generation
+	newStatus.ObservedGeneration = jg.Generation
 
 	var getErr, updateErr error
-	var updatedJW *janusv1alpha1.JanusWatcher
-	for i, jw := 0, jw; ; i++ {
-		glog.V(4).Infof(fmt.Sprintf("Updating status for %v: %s/%s, ", jw.Kind, jw.Namespace, jw.Name) +
-			fmt.Sprintf("observed generation %d->%d, ", jw.Status.ObservedGeneration, jw.Generation) +
-			fmt.Sprintf("observable pods %d->%d, ", jw.Status.ObservablePods, newStatus.ObservablePods) +
-			fmt.Sprintf("watched pods %d->%d", jw.Status.WatchedPods, newStatus.WatchedPods))
+	var updatedJG *janusv1alpha1.JanusGuard
+	for i, jg := 0, jg; ; i++ {
+		glog.V(4).Infof(fmt.Sprintf("Updating status for %v: %s/%s, ", jg.Kind, jg.Namespace, jg.Name) +
+			fmt.Sprintf("observed generation %d->%d, ", jg.Status.ObservedGeneration, jg.Generation) +
+			fmt.Sprintf("observable pods %d->%d, ", jg.Status.ObservablePods, newStatus.ObservablePods) +
+			fmt.Sprintf("guarded pods %d->%d", jg.Status.GuardedPods, newStatus.GuardedPods))
 
 		// If the CustomResourceSubresources feature gate is not enabled, we
 		// must use Update instead of UpdateStatus to update the Status block
-		// of the JanusWatcher resource.
+		// of the JanusGuard resource.
 		// UpdateStatus will not allow changes to the Spec of the resource,
 		// which is ideal for ensuring nothing other than resource status has
 		// been updated.
-		jw.Status = newStatus
-		updatedJW, updateErr = c.UpdateStatus(jw)
+		jg.Status = newStatus
+		updatedJG, updateErr = c.UpdateStatus(jg)
 		if updateErr == nil {
-			return updatedJW, nil
+			return updatedJG, nil
 		}
-		// Stop retrying if we exceed statusUpdateRetries - the janus watcher
+		// Stop retrying if we exceed statusUpdateRetries - the janus guard
 		// will be requeued with a rate limit.
 		if i >= statusUpdateRetries {
 			break
 		}
-		// Update the JanusWatcher with the latest resource version for the next
+		// Update the JanusGuard with the latest resource version for the next
 		// poll.
-		if jw, getErr = c.Get(jw.Name, metav1.GetOptions{}); getErr != nil {
+		if jg, getErr = c.Get(jg.Name, metav1.GetOptions{}); getErr != nil {
 			// If the GET fails we can't trust status.ObservablePods anymore.
 			// This error is bound to be more interesting than the update
 			// failure.
@@ -238,24 +237,24 @@ func updateJanusWatcherStatus(c janusv1alpha1client.JanusWatcherInterface, jw *j
 	return nil, updateErr
 }
 
-// calculateStatus creates a new status from a given JanusWatcher and
+// calculateStatus creates a new status from a given JanusGuard and
 // filteredPods array.
-func calculateStatus(jw *janusv1alpha1.JanusWatcher, filteredPods []*corev1.Pod, manageJanusWatchersErr error) janusv1alpha1.JanusWatcherStatus {
-	newStatus := jw.Status
+func calculateStatus(jg *janusv1alpha1.JanusGuard, filteredPods []*corev1.Pod, manageJanusGuardErr error) janusv1alpha1.JanusGuardStatus {
+	newStatus := jg.Status
 	newStatus.ObservablePods = int32(len(filteredPods))
 
 	// Count the number of pods that have labels matching the labels of the pod
-	// template of the janus watcher, the matching pods may have more labels
-	// than are in the template. Because the label of podTemplateSpec is a
-	// superset of the selector of the janus watcher, so the possible matching
-	// pods must be part of the filteredPods.
-	watchedPods := 0
+	// template of the janus guard, the matching pods may have more labels than
+	// are in the template. Because the label of podTemplateSpec is a superset
+	// of the selector of the janus guard, so the possible matching pods must
+	// be part of the filteredPods.
+	guardedPods := 0
 	for _, pod := range filteredPods {
-		if _, found := pod.GetAnnotations()[JanusWatcherAnnotationKey]; found {
-			watchedPods++
+		if _, found := pod.GetAnnotations()[JanusGuardAnnotationKey]; found {
+			guardedPods++
 		}
 	}
-	newStatus.WatchedPods = int32(watchedPods)
+	newStatus.GuardedPods = int32(guardedPods)
 	return newStatus
 }
 
