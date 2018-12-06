@@ -998,10 +998,11 @@ func (jgc *JanusGuardController) getJanusGuardSubjects(jg *janusv1alpha1.JanusGu
 	var subjects []*pb.JanusGuardSubject
 	for _, s := range jg.Spec.Subjects {
 		subjects = append(subjects, &pb.JanusGuardSubject{
-			Allow: s.Allow,
-			Deny:  s.Deny,
-			Event: s.Events,
-			Tags:  s.Tags,
+			Allow:   s.Allow,
+			Deny:    s.Deny,
+			Event:   s.Events,
+			OnlyDir: s.OnlyDir,
+			Tags:    s.Tags,
 		})
 	}
 	return subjects

@@ -1455,9 +1455,10 @@ func TestGetJanusGuardSubjects(t *testing.T) {
 	f := newFixture(t)
 	jg := newJanusGuard("foo", jgMatchedLabel)
 	jg.Spec.Subjects = []*janusv1alpha1.JanusGuardSubject{{
-		Allow:  []string{"/foo"},
-		Deny:   []string{"/bar"},
-		Events: []string{"baz"},
+		Allow:   []string{"/foo"},
+		Deny:    []string{"/bar"},
+		Events:  []string{"baz"},
+		OnlyDir: true,
 	}}
 	f.jgLister = append(f.jgLister, jg)
 	f.objects = append(f.objects, jg)
@@ -1468,9 +1469,10 @@ func TestGetJanusGuardSubjects(t *testing.T) {
 		t.Errorf("unexpected guard subjects, expected %v, got %v", want, got)
 	}
 	expSubject := &pb.JanusGuardSubject{
-		Allow: []string{"/foo"},
-		Deny:  []string{"/bar"},
-		Event: []string{"baz"},
+		Allow:   []string{"/foo"},
+		Deny:    []string{"/bar"},
+		Event:   []string{"baz"},
+		OnlyDir: true,
 	}
 	if !reflect.DeepEqual(expSubject, subjects[0]) {
 		t.Errorf("Subject does not match\nDiff:\n %s", diff.ObjectGoPrintDiff(expSubject, subjects[0]))
