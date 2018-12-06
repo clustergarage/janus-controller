@@ -3,7 +3,7 @@ module clustergarage.io/janus-controller
 require (
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
-	github.com/clustergarage/janus-proto v0.0.0-20181206184537-fb46c4df799c
+	github.com/clustergarage/janus-proto v0.0.0-20181206204003-66d3a5ba8564
 	github.com/coreos/bbolt v1.3.0 // indirect
 	github.com/coreos/etcd v3.3.9+incompatible // indirect
 	github.com/coreos/go-semver v0.2.0 // indirect

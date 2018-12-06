@@ -25,11 +25,13 @@ type JanusGuardSpec struct {
 
 // JanusGuardSubject is the spec for a JanusGuardSubject resource.
 type JanusGuardSubject struct {
-	Allow   []string          `json:"allow" protobuf:"bytes,1,rep,name=allow"`
-	Deny    []string          `json:"deny" protobuf:"bytes,2,rep,name=deny"`
-	Events  []string          `json:"events" protobuf:"bytes,3,rep,name=events"`
-	OnlyDir bool              `json:"onlyDir,omitempty" protobuf: "bytes,4,,opt,name=onlyDir"`
-	Tags    map[string]string `json:"tags,omitempty" protobuf:"bytes,5,rep,name=tags"`
+	Allow          []string          `json:"allow" protobuf:"bytes,1,rep,name=allow"`
+	Deny           []string          `json:"deny" protobuf:"bytes,2,rep,name=deny"`
+	Events         []string          `json:"events" protobuf:"bytes,3,rep,name=events"`
+	OnlyDir        bool              `json:"onlyDir,omitempty" protobuf:"bytes,4,,opt,name=onlyDir"`
+	AutoAllowOwner bool              `json:"autoAllowOwner,omitempty" protobuf:"bytes,5,,opt,name=autoAllowOwner"`
+	Audit          bool              `json:"audit,omitempty" protobuf:"bytes,6,,opt,name=audit"`
+	Tags           map[string]string `json:"tags,omitempty" protobuf:"bytes,7,rep,name=tags"`
 }
 
 // JanusGuardStatus is the status for a JanusGuard resource.
