@@ -569,6 +569,7 @@ func TestUpdateControllers(t *testing.T) {
 
 	go wait.Until(jgc.runWorker, 10*time.Millisecond, stopCh)
 
+	jg2.Spec.LogFormat = "{foo} {bar}"
 	jg2.Spec.Subjects = []*janusv1alpha1.JanusGuardSubject{{
 		Allow:  []string{"/foo"},
 		Deny:   []string{"/bar"},

@@ -136,6 +136,13 @@ func (in *JanusGuardSubject) DeepCopyInto(out *JanusGuardSubject) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Tags != nil {
+		in, out := &in.Tags, &out.Tags
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 

@@ -18,15 +18,17 @@ type JanusGuard struct {
 
 // JanusGuardSpec is the spec for a JanusGuard resource.
 type JanusGuardSpec struct {
-	Selector *metav1.LabelSelector `json:"selector" protobuf:"bytes,1,req,name=selector"`
-	Subjects []*JanusGuardSubject  `json:"subjects" protobuf:"bytes,2,rep,name=subjects"`
+	Selector  *metav1.LabelSelector `json:"selector" protobuf:"bytes,1,req,name=selector"`
+	Subjects  []*JanusGuardSubject  `json:"subjects" protobuf:"bytes,2,rep,name=subjects"`
+	LogFormat string                `json:"logFormat,omitempty" protobuf:"bytes,3,opt,name=logFormat"`
 }
 
 // JanusGuardSubject is the spec for a JanusGuardSubject resource.
 type JanusGuardSubject struct {
-	Allow  []string `json:"allow" protobuf:"bytes,1,rep,name=allow"`
-	Deny   []string `json:"deny" protobuf:"bytes,1,rep,name=deny"`
-	Events []string `json:"events" protobuf:"bytes,2,rep,name=events"`
+	Allow  []string          `json:"allow" protobuf:"bytes,1,rep,name=allow"`
+	Deny   []string          `json:"deny" protobuf:"bytes,2,rep,name=deny"`
+	Events []string          `json:"events" protobuf:"bytes,3,rep,name=events"`
+	Tags   map[string]string `json:"tags,omitempty" protobuf:"bytes,4,rep,name=tags"`
 }
 
 // JanusGuardStatus is the status for a JanusGuard resource.

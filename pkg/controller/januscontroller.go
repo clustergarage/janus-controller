@@ -248,28 +248,29 @@ func (jgc *JanusGuardController) Run(workers int, stopCh <-chan struct{}) error 
 
 // updateJanusGuard is a callback for when a JanusGuard is updated.
 func (jgc *JanusGuardController) updateJanusGuard(old, new interface{}) {
-	oldjg := old.(*janusv1alpha1.JanusGuard)
-	newjg := new.(*janusv1alpha1.JanusGuard)
+	oldJG := old.(*janusv1alpha1.JanusGuard)
+	newJG := new.(*janusv1alpha1.JanusGuard)
 
-	subjectsChanged := !reflect.DeepEqual(newjg.Spec.Subjects, oldjg.Spec.Subjects)
+	logFormatChanged := !reflect.DeepEqual(newJG.Spec.LogFormat, oldJG.Spec.LogFormat)
+	subjectsChanged := !reflect.DeepEqual(newJG.Spec.Subjects, oldJG.Spec.Subjects)
 
-	if subjectsChanged {
+	if logFormatChanged || subjectsChanged {
 		// Add new JanusGuard definitions.
-		selector, err := metav1.LabelSelectorAsSelector(newjg.Spec.Selector)
+		selector, err := metav1.LabelSelectorAsSelector(newJG.Spec.Selector)
 		if err != nil {
 			return
 		}
-		if selectedPods, err := jgc.podLister.Pods(newjg.Namespace).List(selector); err == nil {
+		if selectedPods, err := jgc.podLister.Pods(newJG.Namespace).List(selector); err == nil {
 			for _, pod := range selectedPods {
 				if !podutil.IsPodReady(pod) {
 					continue
 				}
-				go jgc.updatePodOnceValid(pod.Name, newjg)
+				go jgc.updatePodOnceValid(pod.Name, newJG)
 			}
 		}
 	}
 
-	jgc.enqueueJanusGuard(newjg)
+	jgc.enqueueJanusGuard(newJG)
 }
 
 // addPod is called when a pod is created, enqueue the JanusGuard that
@@ -890,11 +891,12 @@ func (jgc *JanusGuardController) updatePodOnceValid(podName string, jg *janusv1a
 				nodeName, errors.New("failed to get janusd connection"))
 		}
 		if handle, err := fc.AddJanusdGuard(&pb.JanusdConfig{
-			Name:     jg.Name,
-			NodeName: nodeName,
-			PodName:  pod.Name,
-			Cid:      cids,
-			Subject:  jgc.getJanusGuardSubjects(jg),
+			Name:      jg.Name,
+			NodeName:  nodeName,
+			PodName:   pod.Name,
+			Cid:       cids,
+			Subject:   jgc.getJanusGuardSubjects(jg),
+			LogFormat: jg.Spec.LogFormat,
 		}); err == nil {
 			fc.handle = handle
 		}
@@ -999,6 +1001,7 @@ func (jgc *JanusGuardController) getJanusGuardSubjects(jg *janusv1alpha1.JanusGu
 			Allow: s.Allow,
 			Deny:  s.Deny,
 			Event: s.Events,
+			Tags:  s.Tags,
 		})
 	}
 	return subjects
