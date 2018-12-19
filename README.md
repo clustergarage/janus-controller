@@ -2,6 +2,7 @@
 
 [![go report](https://goreportcard.com/badge/github.com/clustergarage/janus-controller?style=flat-square)](https://goreportcard.com/report/github.com/clustergarage/janus-controller)
 [![Docker Automated build](https://img.shields.io/docker/build/clustergarage/janus-controller.svg?style=flat-square)](https://hub.docker.com/r/clustergarage/janus-controller)
+[![Latest Janus release](https://img.shields.io/github/release/clustergarage/janus.svg?style=flat-square)](https://github.com/clustergarage/janus)
 
 This repository implements a Kubernetes controller for watching JanusGuard resources as defined with a CustomResourceDefinition.
 
